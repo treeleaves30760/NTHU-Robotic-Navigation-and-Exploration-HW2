@@ -6,3 +6,4 @@
 .env.production
 
 **/*.pyc
+**/__pycache__
