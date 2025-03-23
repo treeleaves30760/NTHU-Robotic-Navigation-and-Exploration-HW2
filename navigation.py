@@ -56,88 +56,160 @@ def navigation(args, simulator, controller, planner, start_pose=(100, 200, 0)):
     command = ControlState(args.simulator, None, None)
     pose = start_pose
     collision_count = 0
+    goal_reached = False
     # Main Loop
     while (True):
         # Update State
         simulator.step(command)
         pose = (simulator.state.x, simulator.state.y, simulator.state.yaw)
-        print("\r", simulator, "| Goal:", nav_pos, end="\t")
+        print("\r", simulator, "| Goal:", nav_pos,
+              "| Goal Reached: ", goal_reached, end="\t")
 
         if set_controller_path:
             controller.set_path(path)
             set_controller_path = False
+            goal_reached = False
+            print("New Path Set !!")
 
         if path is not None and collision_count == 0:
-            # TODO: Planning and Controlling
-            if args.simulator == "basic":
-                # Get control from controller
-                info = {
-                    "x": simulator.state.x,
-                    "y": simulator.state.y,
-                    "yaw": simulator.state.yaw,
-                    "v": simulator.state.v,
-                    "w": simulator.state.w,
-                    "dt": simulator.dt
-                }
-                next_w, target = controller.feedback(info)
-                next_v = 5.0  # constant velocity
-                command = ControlState("basic", next_v, next_w)
-            elif args.simulator == "diff_drive":
-                # Get control from controller
-                info = {
-                    "x": simulator.state.x,
-                    "y": simulator.state.y,
-                    "yaw": simulator.state.yaw,
-                    "v": simulator.state.v,
-                    "w": simulator.state.w,
-                    "dt": simulator.dt
-                }
-                next_w, target = controller.feedback(info)
-                next_v = 5.0  # constant velocity
-                # Convert to differential drive control
-                wheel_base = 15.0  # approximate wheel base
-                next_lw = (next_v - wheel_base * next_w / 2)
-                next_rw = (next_v + wheel_base * next_w / 2)
-                command = ControlState("diff_drive", next_lw, next_rw)
-            elif args.simulator == "bicycle":
-                # Get control from controller
-                info = {
-                    "x": simulator.state.x,
-                    "y": simulator.state.y,
-                    "yaw": simulator.state.yaw,
-                    "v": simulator.state.v,
-                    "w": simulator.state.w,
-                    "delta": simulator.cstate.delta,
-                    "l": simulator.l,
-                    "dt": simulator.dt
-                }
-                next_delta, target = controller.feedback(info)
-                next_a = 1.0 if simulator.state.v < 10.0 else 0.0  # simple acceleration control
-                command = ControlState("bicycle", next_a, next_delta)
+
+            # 檢查是否已到達目標
+            if nav_pos is not None and not goal_reached:
+                distance_to_goal = np.sqrt(
+                    (simulator.state.x - nav_pos[0])**2 + (simulator.state.y - nav_pos[1])**2)
+                goal_reached = distance_to_goal <= 10.0
+
+            if goal_reached:
+                # 到達目標，根據目前狀態停下車輛，考慮慣性
+                if args.simulator == "basic":
+                    command = ControlState(args.simulator, 0, 0)
+                    next_w = 0
+                    next_v = 0
+                elif args.simulator == "diff_drive":
+                    command = ControlState(args.simulator, 0, 0)
+                    next_lw = 0
+                    next_rw = 0
+                elif args.simulator == "bicycle":
+                    # 由於車輛有慣性，因此需要快速減速，並確保到0，並避免後退
+                    print(f'simulator.state.v: {simulator.state.v}')
+                    if simulator.state.v > 2:
+                        command = ControlState(args.simulator, -3.0, 0)
+                    elif simulator.state.v < -1:
+                        command = ControlState(args.simulator, 10, 0)
+                    else:
+                        command = ControlState(args.simulator, 0, 0)
+
+                # 清除目標點
+                nav_pos = None
+                way_points = None
+                path = None
+
             else:
-                exit()
+                # TODO: Planning and Controlling
+                if args.simulator == "basic":
+                    # Get control from controller
+                    info = {
+                        "x": simulator.state.x,
+                        "y": simulator.state.y,
+                        "yaw": simulator.state.yaw,
+                        "v": simulator.state.v,
+                        "w": simulator.state.w,
+                        "dt": simulator.dt
+                    }
+                    next_w, target = controller.feedback(info)
+                    next_v = 30.0  # constant velocity
+                    command = ControlState("basic", next_v, next_w)
+                elif args.simulator == "diff_drive":
+                    # Get control from controller
+                    info = {
+                        "x": simulator.state.x,
+                        "y": simulator.state.y,
+                        "yaw": simulator.state.yaw,
+                        "v": simulator.state.v,
+                        "w": simulator.state.w,
+                        "dt": simulator.dt
+                    }
+                    next_w, target = controller.feedback(info)
+                    next_v = 30.0  # constant velocity
+                    # Convert to differential drive control
+                    wheel_base = 15.0  # approximate wheel base
+                    next_lw = (next_v - wheel_base * next_w / 2)
+                    next_rw = (next_v + wheel_base * next_w / 2)
+                    command = ControlState("diff_drive", next_lw, next_rw)
+                elif args.simulator == "bicycle":
+                    # Get control from controller
+                    info = {
+                        "x": simulator.state.x,
+                        "y": simulator.state.y,
+                        "yaw": simulator.state.yaw,
+                        "v": simulator.state.v,
+                        "w": simulator.state.w,
+                        "delta": simulator.cstate.delta,
+                        "l": simulator.l,
+                        "dt": simulator.dt
+                    }
+                    next_delta, target = controller.feedback(info)
+                    next_a = 1.0 if simulator.state.v < 10.0 else 0.0  # simple acceleration control
+                    command = ControlState("bicycle", next_a, next_delta)
+                else:
+                    exit()
+        elif goal_reached:
+            # 到達目標，根據目前狀態停下車輛，考慮慣性
+            if args.simulator == "basic":
+                command = ControlState(args.simulator, 0, 0)
+                next_w = 0
+                next_v = 0
+            elif args.simulator == "diff_drive":
+                command = ControlState(args.simulator, 0, 0)
+                next_lw = 0
+                next_rw = 0
+            elif args.simulator == "bicycle":
+                # 由於車輛有慣性，因此需要快速減速，並確保到0，並避免後退
+                print(f'simulator.state.v: {simulator.state.v}')
+                if simulator.state.v > 0.1:
+                    command = ControlState(args.simulator, -2.0, 0)
+                elif simulator.state.v < 0.1:
+                    command = ControlState(args.simulator, 2, 0)
+                else:
+                    command = ControlState(args.simulator, 0, 0)
+
         else:
             command = None
 
+        print(f'command: {command}')
         _, info = simulator.step(command)
         # Collision Handling
         if info["collision"]:
             collision_count = 1
-        if collision_count > 0:
             # TODO: Collision Handling
+        if collision_count != 0:
             # Go back based on the simulator
+            collision_count += 1
             if args.simulator == "basic":
                 command = ControlState("basic", -30.0, 0)
             elif args.simulator == "diff_drive":
-                command = ControlState("diff_drive", -30.0, -30.0)
+                command = ControlState("diff_drive", -30.0, 0)
             elif args.simulator == "bicycle":
-                command = ControlState("bicycle", -50.0, -30.0)
+                command = ControlState("bicycle", -50.0, 0)
+            collision_count += 1
+        if collision_count > 3:
             # Replan the path
+            print(f'Pose: {pose}')
             way_points = planner.planning((pose[0], pose[1]), nav_pos, 20)
+
+            # Check if the path is valid
             if len(way_points) > 1:
                 path = np.array(cubic_spline_2d(way_points, interval=4))
                 set_controller_path = True
                 collision_count = 0
+            else:
+                # Go back more based on the simulator
+                if args.simulator == "basic":
+                    command = ControlState("basic", -30.0, 0)
+                elif args.simulator == "diff_drive":
+                    command = ControlState("diff_drive", -30.0, 0)
+                elif args.simulator == "bicycle":
+                    command = ControlState("bicycle", -50.0, 0)
 
         # Render Path
         img = simulator.render()
