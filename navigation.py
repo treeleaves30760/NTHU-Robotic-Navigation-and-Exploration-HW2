@@ -127,15 +127,14 @@ def navigation(args, simulator, controller, planner, start_pose=(100, 200, 0)):
             # TODO: Collision Handling
             # Go back based on the simulator
             if args.simulator == "basic":
-                command = ControlState("basic", -5.0, 0)
+                command = ControlState("basic", -30.0, 0)
             elif args.simulator == "diff_drive":
-                command = ControlState("diff_drive", -5.0, -5.0)
+                command = ControlState("diff_drive", -30.0, -30.0)
             elif args.simulator == "bicycle":
-                command = ControlState("bicycle", -5.0, -5.0)
+                command = ControlState("bicycle", -50.0, -30.0)
             # Replan the path
             way_points = planner.planning((pose[0], pose[1]), nav_pos, 20)
             if len(way_points) > 1:
-                nav_pos = way_points[1]
                 path = np.array(cubic_spline_2d(way_points, interval=4))
                 set_controller_path = True
                 collision_count = 0
